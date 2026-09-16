@@ -51,6 +51,7 @@ jobs:
           echo "Response SHA-256: $RESPONSE_HASH"
 
           if [ "$HTTP_CODE" != "200" ]; then
+            cat response.json
             echo "CONTROLLED API TEST: FAILED"
             rm -f response.json
             exit 1
