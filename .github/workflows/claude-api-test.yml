@@ -1,0 +1,29 @@
+name: Claude API Controlled Test
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  claude-api-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+
+    steps:
+      - name: Verify Anthropic secret access
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ -z "${ANTHROPIC_API_KEY:-}" ]; then
+            echo "ERROR: ANTHROPIC_API_KEY secret is unavailable."
+            exit 1
+          fi
+
+          echo "::add-mask::$ANTHROPIC_API_KEY"
+          echo "Secret detected securely."
+          echo "API call intentionally NOT executed yet."
