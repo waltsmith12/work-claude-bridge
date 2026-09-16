@@ -12,7 +12,7 @@ jobs:
     timeout-minutes: 2
 
     steps:
-      - name: Verify Anthropic secret access
+      - name: Controlled Anthropic Messages API test
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         shell: bash
@@ -20,10 +20,47 @@ jobs:
           set -euo pipefail
 
           if [ -z "${ANTHROPIC_API_KEY:-}" ]; then
-            echo "ERROR: ANTHROPIC_API_KEY secret is unavailable."
+            echo "ERROR: ANTHROPIC_API_KEY unavailable."
             exit 1
           fi
 
           echo "::add-mask::$ANTHROPIC_API_KEY"
-          echo "Secret detected securely."
-          echo "API call intentionally NOT executed yet."
+
+          CORRELATION_ID="bridge-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+
+          HTTP_CODE=$(curl --silent --show-error \
+            --output response.json \
+            --write-out "%{http_code}" \
+            https://api.anthropic.com/v1/messages \
+            --header "x-api-key: $ANTHROPIC_API_KEY" \
+            --header "anthropic-version: 2023-06-01" \
+            --header "content-type: application/json" \
+            --data "{
+              \"model\": \"claude-sonnet-5\",
+              \"max_tokens\": 64,
+              \"messages\": [{
+                \"role\": \"user\",
+                \"content\": \"Return exactly CLAUDE_BRIDGE_TEST_OK:${CORRELATION_ID}\"
+              }]
+            }")
+
+          RESPONSE_HASH=$(sha256sum response.json | cut -d' ' -f1)
+
+          echo "HTTP status: $HTTP_CODE"
+          echo "Correlation ID: $CORRELATION_ID"
+          echo "Response SHA-256: $RESPONSE_HASH"
+
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "CONTROLLED API TEST: FAILED"
+            rm -f response.json
+            exit 1
+          fi
+
+          if ! grep -q "CLAUDE_BRIDGE_TEST_OK:${CORRELATION_ID}" response.json; then
+            echo "CONTROLLED API TEST: RESPONSE MISMATCH"
+            rm -f response.json
+            exit 1
+          fi
+
+          rm -f response.json
+          echo "CONTROLLED API TEST: PASS"
